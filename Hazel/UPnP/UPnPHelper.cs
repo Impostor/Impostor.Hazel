@@ -1,7 +1,9 @@
 ﻿using System;
 using System.IO;
 using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using System.Xml;
 
@@ -142,20 +144,19 @@ namespace Impostor.Hazel.UPnP
         {
             try
             {
-                XmlDocument desc = new XmlDocument();
-                using (var response = WebRequest.Create(resp).GetResponse())
-                {
-                    desc.Load(response.GetResponseStream());
-                }
+                var desc = new XmlDocument();
+                using var client = new HttpClient();
+                using var response = client.GetStreamAsync(resp).Result;
+                desc.Load(response);
 
-                XmlNamespaceManager nsMgr = new XmlNamespaceManager(desc.NameTable);
+                var nsMgr = new XmlNamespaceManager(desc.NameTable);
                 nsMgr.AddNamespace("tns", "urn:schemas-upnp-org:device-1-0");
-                XmlNode typen = desc.SelectSingleNode("//tns:device/tns:deviceType/text()", nsMgr);
+                var typen = desc.SelectSingleNode("//tns:device/tns:deviceType/text()", nsMgr);
                 if (!typen.Value.Contains("InternetGatewayDevice"))
                     return false;
 
                 serviceName = "WANIPConnection";
-                XmlNode node = desc.SelectSingleNode("//tns:service[tns:serviceType=\"urn:schemas-upnp-org:service:" + serviceName + ":1\"]/tns:controlURL/text()", nsMgr);
+                var node = desc.SelectSingleNode("//tns:service[tns:serviceType=\"urn:schemas-upnp-org:service:" + serviceName + ":1\"]/tns:controlURL/text()", nsMgr);
                 if (node == null)
                 {
                     //try another service name
@@ -166,14 +167,14 @@ namespace Impostor.Hazel.UPnP
                 }
 
                 serviceUrl = CombineUrls(resp, node.Value);
-                this.logger.WriteInfo("UPnP service ready");
+                logger.WriteInfo("UPnP service ready");
                 Status = UPnPStatus.Available;
                 discoveryComplete.Set();
                 return true;
             }
             catch (Exception e)
             {
-                this.logger.WriteError("Exception while parsing UPnP Service URL: " + e.Message);
+                logger.WriteError("Exception while parsing UPnP Service URL: " + e.Message);
                 return false;
             }
         }
@@ -313,35 +314,33 @@ namespace Impostor.Hazel.UPnP
 
         private XmlDocument SOAPRequest(string url, string soap, string function)
         {
-            string req = 
+            var req = 
 "<?xml version=\"1.0\"?>" +
 "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">" +
 $"<s:Body>{soap}</s:Body>" +
 "</s:Envelope>";
 
-            WebRequest r = HttpWebRequest.Create(url);
-            r.Headers.Add("SOAPACTION", $"\"urn:schemas-upnp-org:service:{serviceName}:1#{function}\"");
-            r.ContentType = "text/xml; charset=\"utf-8\"";
-            r.Method = "POST";
-
-            byte[] b = System.Text.Encoding.UTF8.GetBytes(req);
-            r.ContentLength = b.Length;
-            r.GetRequestStream().Write(b, 0, b.Length);
-
-            using (WebResponse wres = r.GetResponse())
+            var request = new HttpRequestMessage(HttpMethod.Post, url)
             {
-                XmlDocument resp = new XmlDocument();
-                Stream ress = wres.GetResponseStream();
-                resp.Load(ress);
-                return resp;
-            }
+                Content = new StringContent(req, Encoding.UTF8, "text/xml")
+            };
+            request.Headers.Add("SOAPACTION", $"\"urn:schemas-upnp-org:service:{serviceName}:1#{function}\"");
+
+            using var client = new HttpClient();
+            
+            using var response = client.SendAsync(request).Result;
+            
+            var xmlDoc = new XmlDocument();
+            xmlDoc.Load(response.Content.ReadAsStream());
+            
+            return xmlDoc;
         }
 
         public void Dispose()
         {
-            this.discoveryComplete.Dispose();
-            try { this.socket.Shutdown(SocketShutdown.Both); } catch { }
-            this.socket.Dispose();
+            discoveryComplete.Dispose();
+            try { socket.Shutdown(SocketShutdown.Both); } catch { }
+            socket.Dispose();
         }
     }
 }

@@ -301,26 +301,26 @@ namespace Impostor.Hazel.Dtls
                 throw new ArgumentException("Certificate must have a private key attached", nameof(certificate));
             }
 
-            RSA privateKey = certificate.PrivateKey as RSA;
+            var privateKey = certificate.GetRSAPrivateKey();
             if (privateKey == null)
             {
                 throw new ArgumentException("Certificate must be signed by an RSA key", nameof(certificate));
             }
 
-            this.certificatePrivateKey?.Dispose();
-            this.certificatePrivateKey = privateKey;
+            certificatePrivateKey?.Dispose();
+            certificatePrivateKey = privateKey;
 
             // Pre-fragment the certificate data
-            ByteSpan certificateData = Certificate.Encode(certificate);
-            this.encodedCertificatesTotalSize = (uint)certificateData.Length;
+            var certificateData = Certificate.Encode(certificate);
+            encodedCertificatesTotalSize = (uint)certificateData.Length;
 
             // The first certificate data needs to leave room for
             //  * Record header
             //  * ServerHello header
             //  * ServerHello payload
             //  * Certificate header
-            int padding = Record.Size + Handshake.Size + ServerHello.Size + Handshake.Size;
-            this.encodedCertificates.Add(certificateData.Slice(0, Math.Min(certificateData.Length, MaxDatagramSize - padding)));
+            var padding = Record.Size + Handshake.Size + ServerHello.Size + Handshake.Size;
+            encodedCertificates.Add(certificateData.Slice(0, Math.Min(certificateData.Length, MaxDatagramSize - padding)));
             certificateData = certificateData.Slice(Math.Min(certificateData.Length, MaxDatagramSize - padding));
 
             // Subsequent certificate data needs to leave room for
@@ -329,7 +329,7 @@ namespace Impostor.Hazel.Dtls
             padding = Record.Size + Handshake.Size;
             while (certificateData.Length > 0)
             {
-                this.encodedCertificates.Add(certificateData.Slice(0, Math.Min(certificateData.Length, MaxDatagramSize - padding)));
+                encodedCertificates.Add(certificateData.Slice(0, Math.Min(certificateData.Length, MaxDatagramSize - padding)));
                 certificateData = certificateData.Slice(Math.Min(certificateData.Length, MaxDatagramSize - padding));
             }
         }
@@ -343,7 +343,7 @@ namespace Impostor.Hazel.Dtls
         protected override ValueTask ProcessData(UdpReceiveResult data)
         {
             ByteSpan message = new ByteSpan(data.Buffer);
-            return this.ProcessIncomingMessage(message, data.RemoteEndPoint);
+            return ProcessIncomingMessage(message, data.RemoteEndPoint);
         }
 
         /// <summary>
@@ -1331,8 +1331,7 @@ namespace Impostor.Hazel.Dtls
         /// </summary>
         private static HMAC CreateNewCookieHMAC()
         {
-            const string HMACProvider = "System.Security.Cryptography.HMACSHA1";
-            return HMAC.Create(HMACProvider);
+            return new HMACSHA1();
         }
     }
 }

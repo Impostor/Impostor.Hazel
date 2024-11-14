@@ -342,7 +342,7 @@ public class MessageReaderTests
             }
             else
             {
-                Assert.True(false, "Invalid tag was read.");
+                Assert.Fail("Invalid tag was read.");
             }
         }
 

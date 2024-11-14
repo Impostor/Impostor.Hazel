@@ -641,7 +641,7 @@ namespace Impostor.Hazel.Dtls
             span.CopyTo(rawData, 0);
             try
             {
-                certificate = new X509Certificate2(rawData);
+                certificate = X509CertificateLoader.LoadCertificate(rawData);
             }
             catch (Exception)
             {
