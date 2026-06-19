@@ -196,7 +196,7 @@ namespace Impostor.Hazel.Udp
             }
 
             // Write to client.
-            await client.Pipeline.Writer.WriteAsync(data.Buffer);
+            client.Pipeline.Writer.TryWrite(data.Buffer);
         }
 
         /// <summary>
