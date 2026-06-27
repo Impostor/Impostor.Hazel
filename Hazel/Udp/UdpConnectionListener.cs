@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.ObjectPool;
 using Serilog;
@@ -138,6 +139,7 @@ namespace Impostor.Hazel.Udp
                             Logger.Fatal("Hazel read 0 bytes from UDP server socket.");
                             continue;
                         }
+                        await ProcessData(data);
                     }
                     catch (SocketException)
                     {
@@ -149,8 +151,11 @@ namespace Impostor.Hazel.Udp
                         // Socket was disposed, don't care.
                         return;
                     }
-
-                    await ProcessData(data);
+                    catch (ChannelClosedException)
+                    {
+                        // Client closed, pretend it didn't happen
+                        continue;
+                    }
                 }
             }
             catch (Exception e)
@@ -191,7 +196,7 @@ namespace Impostor.Hazel.Udp
             }
 
             // Write to client.
-            await client.Pipeline.Writer.WriteAsync(data.Buffer);
+            client.Pipeline.Writer.TryWrite(data.Buffer);
         }
 
         /// <summary>
